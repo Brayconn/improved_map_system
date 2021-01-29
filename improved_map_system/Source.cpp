@@ -1,4 +1,6 @@
 #include <windows.h>
+#include <cstring>
+#include <cstdio>
 #include "Header.h"
 extern "C"
 {
@@ -6,8 +8,27 @@ extern "C"
 #include "mod_loader.h"
 }
 
+const int tileTypeEntries = 256;
 //Map system tile for the corrseponding byte value
-static int tileTypes[256];
+static int tileTypes[tileTypeEntries]
+{
+	0,1,1,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	1,3,3,2,1,3,3,3,3,3,3,3,3,3,3,3,
+	2,1,1,2,2,1,1,2,3,3,3,3,3,3,3,3,
+	1,3,3,2,3,3,3,3,3,3,3,3,3,3,3,3,
+	2,1,1,2,2,1,1,2,3,3,3,3,3,3,3,3,
+	1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+};
 
 //Rects for all map system tiles
 static RECT tileTypeRects[4] = 
@@ -24,8 +45,9 @@ void DrawMiniMapLine(int line, int scale)
 	ModLoader_PrintDebug("Drawing map line %d:\n", line);
 	for (int i = 0; i < CS_level_width; i++)
 	{
-		ModLoader_PrintDebug("\r%d", i);
-		DrawSpriteOntoSurface(i, line, &tileTypeRects[tileTypes[GetTileType(i * scale, line * scale)]], SURFACE_ID_MAP, SURFACE_ID_TEXT_BOX);
+		unsigned char tileType = GetTileType(i * scale, line * scale);
+		ModLoader_PrintDebug("%d - %d\n", i, tileType);
+		DrawSpriteOntoSurface(i, line, &tileTypeRects[tileTypes[tileType]], SURFACE_ID_MAP, SURFACE_ID_TEXT_BOX);
 	}
 	ModLoader_PrintDebug(", Complete!\n");
 }
@@ -118,7 +140,7 @@ int DrawMiniMap()
 		(CS_clip_rect_common.right / 2) + (scaledx / 2) + borderSize,
 		(CS_clip_rect_common.bottom / 2) + (scaledy / 2) + borderSize
 	};
-	ModLoader_PrintDebug("%d,%d,%d,%d\n", Border.left, Border.top, Border.right, Border.bottom);
+	//ModLoader_PrintDebug("%d,%d,%d,%d\n", Border.left, Border.top, Border.right, Border.bottom);
 
 
 	int youAreHereX = ((*QuoteX / 512 + 8) / 16) / scale;
@@ -173,6 +195,9 @@ int DrawMiniMap()
 	return 1;
 }
 
+const char* IndexMap = "IndexMap.bin";
+
+#pragma warning( disable: 4996) //_CRT_SECURE_NO_WARNINGS
 extern "C" void InitMod()
 {
 	stepCount = ModLoader_GetSettingInt("stepCount", 8);
@@ -184,6 +209,32 @@ extern "C" void InitMod()
 
 	linesPerLoop = ModLoader_GetSettingInt("linesPerLoop", 2);
 
+	//Prepare path to the file
+	char* strbuff = new char[strlen(ModLoader_path_to_dll) + strlen(IndexMap)]();
+	strcpy(strbuff, ModLoader_path_to_dll);
+	strcat(strbuff, IndexMap);
+	ModLoader_PrintDebug("%s\n", strbuff);
+
+	FILE* file = fopen(strbuff, "rb");
+	if (file)
+	{
+		//load if exists
+		ModLoader_PrintDebug("tileTypes length should == %d", tileTypeEntries * sizeof(int));
+		fread(tileTypes, sizeof(int), tileTypeEntries, file);
+		fclose(file);
+		ModLoader_PrintDebug("tileTypes[1] = %d\n", tileTypes[1]);
+	}
+	else
+	{
+		//otherwise create with defaults
+		ModLoader_PrintDebug("Error opening \"%s\"!\nGenerating file instead...", strbuff);
+		file = fopen(strbuff, "wb");
+		fwrite(tileTypes, sizeof(int), tileTypeEntries, file);
+		fclose(file);
+		ModLoader_PrintDebug("File created succesfully!");
+	}
+
 	ModLoader_WriteJump((DWORD*)0x004143C0, &DrawMiniMapLine);
 	ModLoader_WriteJump((DWORD*)0x00414640, &DrawMiniMap);
 }
+#pragma warning( default: 4996)
